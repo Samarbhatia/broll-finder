@@ -1,0 +1,11 @@
+{
+  "name": "broll-finder",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Find archive and stock images for a narrated video and download them as one ZIP",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "test": "node tests/run.mjs"
+  }
+}

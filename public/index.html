@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src https: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="robots" content="noindex">
+<title>B-Roll Finder</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a; --surface: #111; --surface2: #1a1a1a; --border: #2a2a2a;
+    --accent: #e8ff47; --accent2: #ff6b35; --text: #f0f0f0; --muted: #8a8a8a;
+    --green: #47ffb2; --amber: #ffc24d; --red: #ff4757;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; min-height: 100vh; overflow-x: hidden; }
+  body::before {
+    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image: linear-gradient(rgba(232,255,71,.03) 1px, transparent 1px), linear-gradient(90deg, rgba(232,255,71,.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px 64px; position: relative; z-index: 1; }
+
+  header { padding: 28px 0 22px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon { width: 36px; height: 36px; background: var(--accent); border-radius: 6px; display: grid; place-items: center; font-size: 18px; }
+  .logo-text { font-size: 20px; font-weight: 800; letter-spacing: -.5px; }
+  .logo-text span { color: var(--accent); }
+  .badge { font-family: 'Space Mono', monospace; font-size: 10px; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); padding: 4px 10px; border-radius: 20px; letter-spacing: 1px; }
+
+  .hero { padding: 44px 0 28px; text-align: center; }
+  .hero h1 { font-size: clamp(32px, 5.5vw, 60px); font-weight: 800; line-height: 1.05; letter-spacing: -2px; margin-bottom: 14px; }
+  .hero h1 .hl { color: var(--accent); }
+  .hero p { color: var(--muted); font-size: 15px; max-width: 560px; margin: 0 auto; line-height: 1.6; }
+
+  .notice { background: rgba(255,194,77,.06); border: 1px solid rgba(255,194,77,.25); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; font-size: 12.5px; line-height: 1.6; color: #cdbb94; }
+  .notice strong { color: var(--amber); }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; margin-bottom: 16px; }
+  .mode-toggle { display: flex; gap: 8px; margin-bottom: 20px; background: var(--surface2); border-radius: 10px; padding: 4px; }
+  .mode-btn { flex: 1; background: transparent; border: 0; border-radius: 7px; padding: 10px 14px; font: 600 13px 'Syne', sans-serif; color: var(--muted); cursor: pointer; }
+  .mode-btn.active { background: var(--accent); color: #000; }
+  .mode-btn:not(.active):hover { color: var(--text); }
+
+  .hint { font-size: 12.5px; color: var(--muted); background: rgba(232,255,71,.04); border: 1px solid rgba(232,255,71,.12); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; line-height: 1.6; }
+  .input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 13px 16px; color: var(--text); font: 15px 'Syne', sans-serif; outline: none; transition: border-color .2s; }
+  .input:focus { border-color: var(--accent); }
+  textarea.input { min-height: 190px; resize: vertical; font-size: 13px; line-height: 1.7; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+  .label { font: 700 10px 'Space Mono', monospace; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-top: 18px; }
+
+  .chip { display: inline-flex; align-items: center; gap: 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; cursor: pointer; font-size: 13px; color: var(--muted); user-select: none; transition: all .2s; }
+  .chip:hover { border-color: var(--accent); color: var(--text); }
+  .chip.on { border-color: var(--accent); color: var(--accent); background: rgba(232,255,71,.05); }
+  .chip input { position: absolute; opacity: 0; pointer-events: none; }
+  .chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+  select.input { width: auto; padding: 8px 12px; font-size: 13px; }
+
+  .keys { padding: 0; }
+  .keys > summary { padding: 18px 28px; cursor: pointer; font: 700 14px 'Syne', sans-serif; color: var(--text); list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .keys > summary::-webkit-details-marker { display: none; }
+  .keys > summary .state { font: 11px 'Space Mono', monospace; color: var(--amber); font-weight: 400; }
+  .keys > summary .state.ready { color: var(--green); }
+  .keys-body { padding: 0 28px 24px; }
+  .keys-intro { font-size: 12.5px; color: var(--muted); line-height: 1.6; margin-bottom: 6px; }
+  .key-row { display: grid; grid-template-columns: 110px 1fr auto; gap: 10px; align-items: center; margin-top: 14px; }
+  .key-row .kname { font-size: 13px; font-weight: 700; }
+  .key-row .kname small { display: block; font: 10px 'Space Mono', monospace; font-weight: 400; color: var(--muted); }
+  .key-row .input { margin: 0; max-width: none; font: 13px 'Space Mono', monospace; padding: 11px 14px; }
+  .get-key { font: 700 12px 'Syne', sans-serif; color: #000; background: var(--accent); border-radius: 8px; padding: 10px 14px; text-decoration: none; white-space: nowrap; }
+  .get-key:hover { opacity: .88; }
+  .keys-foot { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 18px; font-size: 12px; color: var(--muted); }
+  .link-btn { background: none; border: 0; color: var(--accent2); font: 12px 'Syne', sans-serif; cursor: pointer; text-decoration: underline; padding: 0; }
+  @media (max-width: 560px) { .key-row { grid-template-columns: 1fr; } .keys > summary, .keys-body { padding-left: 20px; padding-right: 20px; } }
+
+  details { margin-top: 16px; font-size: 13px; color: var(--muted); }
+  details summary { cursor: pointer; }
+  details .input { margin-top: 10px; max-width: 320px; }
+
+  .btn { width: 100%; margin-top: 22px; background: var(--accent); color: #000; border: 0; border-radius: 10px; padding: 15px; font: 700 16px 'Syne', sans-serif; cursor: pointer; transition: all .2s; }
+  .btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 32px rgba(232,255,71,.25); }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+
+  .progress { display: none; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px; margin-bottom: 24px; }
+  .progress.show { display: block; }
+  .progress-head { display: flex; justify-content: space-between; margin-bottom: 14px; font: 700 12px 'Space Mono', monospace; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+  .progress-head b { color: var(--accent); font-weight: 700; }
+  .bar { background: var(--surface2); height: 4px; border-radius: 4px; overflow: hidden; margin-bottom: 16px; }
+  .bar > div { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--green)); transition: width .4s ease; }
+  .log { font: 11px/1.8 'Space Mono', monospace; color: var(--muted); max-height: 130px; overflow-y: auto; }
+  .log .t { color: var(--accent); opacity: .6; margin-right: 10px; }
+  .log .ok { color: var(--green); } .log .warn { color: var(--amber); } .log .err { color: var(--red); }
+
+  .results { display: none; }
+  .results.show { display: block; }
+  .results-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .results-title { font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
+  .zip-btn { background: var(--accent2); color: #fff; border: 0; border-radius: 10px; padding: 12px 22px; font: 700 14px 'Syne', sans-serif; cursor: pointer; transition: all .2s; }
+  .zip-btn:hover:not(:disabled) { transform: translateY(-1px); opacity: .92; }
+  .zip-btn:disabled { opacity: .6; cursor: progress; }
+  .zip-note { width: 100%; font-size: 12px; color: var(--muted); }
+
+  .pills { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+  .pill { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 15px; font-size: 12px; color: var(--muted); }
+  .pill b { display: block; font: 700 21px 'Space Mono', monospace; color: var(--accent); line-height: 1.2; }
+
+  .script-block { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
+  .script-block summary { padding: 12px 18px; background: var(--surface2); cursor: pointer; font: 11px 'Space Mono', monospace; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+  .script-body { padding: 18px; font-size: 14px; line-height: 1.8; color: #ccc; max-height: 240px; overflow-y: auto; white-space: pre-wrap; }
+
+  .scene { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; margin-bottom: 18px; overflow: hidden; }
+  .scene-head { padding: 14px 18px; display: flex; align-items: flex-start; gap: 14px; border-bottom: 1px solid var(--border); background: var(--surface2); }
+  .scene-num { width: 32px; height: 32px; flex: none; background: var(--accent); color: #000; border-radius: 6px; display: grid; place-items: center; font-weight: 800; font-size: 14px; }
+  .scene-info { flex: 1; min-width: 0; }
+  .scene-title { font-size: 15px; font-weight: 700; margin-bottom: 3px; }
+  .scene-meta { font: 11px/1.6 'Space Mono', monospace; color: var(--muted); }
+  .scene-count { flex: none; font: 11px 'Space Mono', monospace; padding: 4px 10px; border-radius: 20px; background: rgba(71,255,178,.1); color: var(--green); border: 1px solid rgba(71,255,178,.2); }
+  .scene-count.low { background: rgba(255,194,77,.1); color: var(--amber); border-color: rgba(255,194,77,.25); }
+
+  .grid { padding: 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+  .item { border-radius: 10px; overflow: hidden; border: 1px solid var(--border); background: var(--surface2); cursor: pointer; position: relative; transition: border-color .2s, transform .2s; }
+  .item:hover { border-color: var(--accent); transform: scale(1.015); }
+  .item.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+  .item img { width: 100%; height: 108px; object-fit: cover; display: block; background: #222; }
+  .item img.broken { visibility: hidden; }
+  .tick { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #000; display: none; place-items: center; font: 700 12px sans-serif; }
+  .item.sel .tick { display: grid; }
+  .info { padding: 8px 10px 10px; }
+  .tag { display: inline-block; font: 9px 'Space Mono', monospace; letter-spacing: 1px; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; margin: 0 3px 4px 0; background: rgba(255,255,255,.07); color: #ccc; }
+  .tag.video { background: rgba(255,107,53,.2); color: var(--accent2); }
+  .name { font-size: 11.5px; line-height: 1.35; margin-bottom: 3px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .by, .lic { font: 10px/1.45 'Space Mono', monospace; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lic.ok { color: #4fbf8f; } .lic.verify { color: var(--amber); }
+  .src { display: inline-block; margin-top: 5px; font: 10px 'Space Mono', monospace; color: var(--accent); text-decoration: none; }
+  .src:hover { text-decoration: underline; }
+  .empty { padding: 22px; text-align: center; color: var(--muted); font: 12px 'Space Mono', monospace; }
+
+  ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  @media (max-width: 560px) { .card { padding: 20px; } .container { padding: 0 16px 48px; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="logo">
+      <div class="logo-icon" aria-hidden="true">🎬</div>
+      <div class="logo-text">b<span>roll</span>.finder</div>
+    </div>
+    <div class="badge">v0.2</div>
+  </header>
+
+  <section class="hero">
+    <h1>Find the pictures.<br><span class="hl">Download one ZIP.</span></h1>
+    <p>Paste your script. It is split into scenes, then matching archive photos and stock images are gathered, with the licence and credit for every file.</p>
+  </section>
+
+  <div class="notice">
+    <strong>Check before you publish.</strong> Licence labels come from each source's own data and are a convenience, not legal advice.
+    Anything marked <strong>verify</strong> needs a look at its source page. <b>credits.txt</b> in the ZIP lists the author and licence for every file.
+  </div>
+
+  <details class="card keys" id="keysBox" open>
+    <summary><span>🔑 Your API keys</span><span class="state" id="keysState">Groq key needed</span></summary>
+    <div class="keys-body">
+      <p class="keys-intro">This tool runs on your own free accounts. Paste a key into each box, or press <b>Get a key</b> if you don't have one yet (all three are free to sign up). Groq is needed to split your script into scenes. Pexels and Pixabay are optional: leave them empty and those sources are skipped. Wikimedia Commons and Library of Congress need no key.</p>
+
+      <div class="key-row">
+        <div class="kname">Groq<small>required</small></div>
+        <input class="input" id="keyGroq" type="password" autocomplete="off" spellcheck="false" placeholder="gsk_...">
+        <a class="get-key" href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Get a key ↗</a>
+      </div>
+      <div class="key-row">
+        <div class="kname">Pexels<small>optional</small></div>
+        <input class="input" id="keyPexels" type="password" autocomplete="off" spellcheck="false" placeholder="Pexels API key">
+        <a class="get-key" href="https://www.pexels.com/api/" target="_blank" rel="noopener noreferrer">Get a key ↗</a>
+      </div>
+      <div class="key-row">
+        <div class="kname">Pixabay<small>optional</small></div>
+        <input class="input" id="keyPixabay" type="password" autocomplete="off" spellcheck="false" placeholder="Pixabay API key">
+        <a class="get-key" href="https://pixabay.com/api/docs/" target="_blank" rel="noopener noreferrer">Get a key ↗</a>
+      </div>
+
+      <div class="keys-foot">
+        <label class="chip" id="rememberChip"><input type="checkbox" id="rememberKeys">Remember on this device</label>
+        <button class="link-btn" id="clearKeys" type="button">Clear keys</button>
+      </div>
+      <p class="keys-intro" style="margin-top:12px">Your keys are sent only with your own requests, over HTTPS, and are not stored on the server. If "Remember" is off they disappear when you close the tab. Don't tick it on a shared computer.</p>
+    </div>
+  </details>
+
+  <div class="card">
+    <div class="mode-toggle" role="tablist">
+      <button class="mode-btn active" id="modeScript" role="tab" type="button">📄 Paste my script</button>
+      <button class="mode-btn" id="modeTopic" role="tab" type="button">🧭 Outline from topic</button>
+    </div>
+
+    <div id="panelScript">
+      <div class="hint">Paste the narration you wrote and fact-checked. The AI only splits it into scenes and suggests search terms. It never edits your words.</div>
+      <textarea class="input" id="scriptInput" placeholder="Paste your full narration script here..."></textarea>
+    </div>
+
+    <div id="panelTopic" hidden>
+      <div class="hint">Gives a scene <b>outline</b> and search terms, not a script. You still research and write the narration, so no invented facts end up in your video.</div>
+      <input class="input" id="topicInput" type="text" maxlength="300" placeholder='e.g. "The 1907 Quebec Bridge collapse"'>
+      <div class="row">
+        <label for="durationSelect" style="font-size:13px;color:var(--muted)">Length</label>
+        <select class="input" id="durationSelect">
+          <option value="5">5 min</option>
+          <option value="8">8 min</option>
+          <option value="10" selected>10 min</option>
+          <option value="15">15 min</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="label">Sources</div>
+    <div class="row" style="margin-top:8px">
+      <label class="chip on"><input type="checkbox" id="srcCommons" checked>🏛 Wikimedia Commons</label>
+      <label class="chip on"><input type="checkbox" id="srcLoc" checked>📚 Library of Congress</label>
+      <label class="chip on"><input type="checkbox" id="srcPexels" checked>📷 Pexels</label>
+      <label class="chip on"><input type="checkbox" id="srcPixabay" checked>🖼 Pixabay</label>
+    </div>
+    <div class="label">Include</div>
+    <div class="row" style="margin-top:8px">
+      <label class="chip on"><input type="checkbox" id="optPhotos" checked>🖼 Photos</label>
+      <label class="chip"><input type="checkbox" id="optVideos">🎥 Videos (links only)</label>
+    </div>
+
+    <details>
+      <summary>Passcode</summary>
+      <input class="input" id="passcode" type="password" autocomplete="off" placeholder="Passcode (only if the site owner set one)">
+    </details>
+
+    <button class="btn" id="goBtn" type="button">⚡ Find images</button>
+  </div>
+
+  <section class="progress" id="progress" aria-live="polite">
+    <div class="progress-head"><span>Working</span><b id="pct">0%</b></div>
+    <div class="bar"><div id="barFill"></div></div>
+    <div class="log" id="log"></div>
+  </section>
+
+  <section class="results" id="results">
+    <div class="results-head">
+      <div class="results-title" id="resultsTitle">Your B-roll pack</div>
+      <button class="zip-btn" id="zipBtn" type="button">⬇ Download ZIP</button>
+      <div class="zip-note" id="zipNote">Click images to choose specific ones. With nothing selected, the ZIP contains every photo.</div>
+    </div>
+    <div class="pills" id="pills"></div>
+    <details class="script-block" id="scriptBlock" hidden>
+      <summary>// Your script</summary>
+      <div class="script-body" id="scriptBody"></div>
+    </details>
+    <div id="scenes"></div>
+  </section>
+</div>
+
+<script src="lib.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
