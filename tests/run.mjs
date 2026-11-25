@@ -25,7 +25,7 @@ globalThis.fetch = async (url, opts = {}) => {
       { title: 'Collapse', description: 'd', start: 'On August 29 1907', archive_queries: ['Quebec Bridge collapse'], stock_queries: [] } ] }) } }] });
   }
   if (u.includes('commons.wikimedia.org')) {
-    return j({ query: { pages: [{ pageid: 1, title: 'File:Qb.jpg', imageinfo: [{ mime: 'image/jpeg', thumburl: 'https://upload.wikimedia.org/t.jpg', url: 'https://upload.wikimedia.org/o.jpg', descriptionurl: 'https://commons.wikimedia.org/wiki/File:Qb.jpg', extmetadata: { LicenseShortName: { value: 'Public domain' }, Artist: { value: '<a href="x">Someone</a>' } } }] }] } });
+    return j({ query: { pages: [{ pageid: 1, title: 'File:Qb.jpg', imageinfo: [{ mime: 'image/jpeg', thumburl: 'https://upload.wikimedia.org/t.jpg', url: 'https://upload.wikimedia.org/o.jpg', descriptionurl: 'https://commons.wikimedia.org/wiki/File:Qb.jpg', extmetadata: { LicenseShortName: { value: 'Public domain' }, ImageDescription: { value: 'The Quebec Bridge in 1907' }, Artist: { value: '<a href="x">Someone</a>' } } }] }] } });
   }
   if (u.includes('loc.gov')) return j({ results: [] });
   if (u.includes('api.pexels.com')) {
@@ -121,6 +121,22 @@ await t('lib: splitScenes aligns on scene starts', () => {
   const f = L.splitScenes(text, [{ start: 'nope' }, { start: 'nada' }]);
   assert.equal(f.aligned, false);
   assert.equal(f.parts.length, 2);
+});
+
+await t('coverage: off-topic Commons hits are dropped', async () => {
+  const { coverage } = await import('../netlify/lib/sources.mjs');
+  assert.ok(coverage('Quebec Bridge collapse 1907', 'Quebec Bridge after the collapse 1907') >= 0.6);
+  assert.ok(coverage('Quebec Bridge', 'Quebec-00769 - Nicolet Sector lighthouse') < 0.6);
+  assert.ok(coverage('Quebec Bridge', 'Howrah Bridge - Calcutta') < 0.6);
+});
+
+await t('commons: retries once after HTTP 429', async () => {
+  const real = globalThis.fetch; let n = 0;
+  globalThis.fetch = async (u, o) => (String(u).includes('commons.wikimedia.org') && n++ === 0 ? new Response('', { status: 429, headers: { 'retry-after': '0' } }) : real(u, o));
+  const { searchCommons } = await import('../netlify/lib/sources.mjs');
+  const r = await searchCommons('Quebec Bridge');
+  globalThis.fetch = real;
+  assert.equal(r.length, 1);
 });
 
 await t('lib: estimateImages and slug', () => {

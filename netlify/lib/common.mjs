@@ -1,7 +1,7 @@
 // Shared helpers for all Netlify Functions.
 import { createHash, timingSafeEqual } from 'node:crypto';
 
-export const UA = 'BrollFinder/1.0 (personal research tool)';
+export const UA = 'BrollFinder/1.1 (https://github.com/Samarbhatia/broll-finder; personal research tool)';
 
 export function env(name) {
   const fromNetlify = globalThis.Netlify?.env?.get?.(name);

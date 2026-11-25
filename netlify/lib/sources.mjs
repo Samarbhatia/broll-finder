@@ -7,6 +7,22 @@ import { timedFetch, stripTags, shortHash } from './common.mjs';
 
 const PD_RE = /public domain|^pd[-\s]|^pd$|cc0|pdm|no known copyright/i;
 
+// ---------------------------------------------------------------- relevance
+const STOP = new Set(['the','of','and','in','at','on','a','an','to','for','from','with','by','photograph','photo','picture','image','map','plan','drawing','old','historic','historical']);
+export function tokens(s) {
+  return (String(s).toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').match(/[a-z0-9]+/g) || []).filter((t) => t.length > 1 && !STOP.has(t));
+}
+// Share of the query's meaningful words that appear in the file's title, description or categories.
+export function coverage(query, text) {
+  const q = tokens(query);
+  if (!q.length) return 1;
+  const hay = new Set(tokens(text));
+  let hit = 0;
+  for (const t of q) if (hay.has(t) || hay.has(t.replace(/s$/, ''))) hit++;
+  return hit / q.length;
+}
+const MIN_COVERAGE = 0.6;
+
 // ---------------------------------------------------------------- Wikimedia Commons
 export async function searchCommons(query, limit = 4) {
   const params = new URLSearchParams({
@@ -14,16 +30,22 @@ export async function searchCommons(query, limit = 4) {
     generator: 'search',
     gsrnamespace: '6', // File: namespace on Commons
     gsrsearch: `${query} filetype:bitmap`,
-    gsrlimit: String(limit),
+    gsrlimit: String(Math.min(20, limit * 3)), // fetch extra, then keep only relevant ones
     prop: 'imageinfo',
     iiprop: 'url|extmetadata|mime|size|thumbmime',
     iiurlwidth: '1600',
     iiextmetadatafilter:
-      'LicenseShortName|LicenseUrl|Artist|Credit|NonFree|Restrictions|ObjectName|AttributionRequired',
+      'LicenseShortName|LicenseUrl|Artist|Credit|NonFree|Restrictions|ObjectName|AttributionRequired|ImageDescription|Categories',
     format: 'json',
     formatversion: '2',
   });
-  const res = await timedFetch(`https://commons.wikimedia.org/w/api.php?${params}`);
+  let res = await timedFetch(`https://commons.wikimedia.org/w/api.php?${params}`);
+  if (res.status === 429) {
+    // Rate limited: wait briefly and try once more.
+    const wait = Math.min(2500, (Number(res.headers.get('retry-after')) || 1.2) * 1000);
+    await new Promise((r) => setTimeout(r, wait));
+    res = await timedFetch(`https://commons.wikimedia.org/w/api.php?${params}`);
+  }
   if (!res.ok) throw new Error(`Commons HTTP ${res.status}`);
   const data = await res.json();
   const pages = data?.query?.pages || [];
@@ -47,7 +69,12 @@ export async function searchCommons(query, limit = 4) {
     const needsCredit = !PD_RE.test(license);
     if (needsCredit) notes.push('Credit the author and licence');
 
+    const title0 = val('ObjectName') || (pg.title || '').replace(/^File:/, '').replace(/\.[a-z0-9]+$/i, '').replace(/_/g, ' ');
+    const rel = coverage(query, `${title0} ${val('ImageDescription')} ${val('Categories').replace(/\|/g, ' ')}`);
+    if (rel < MIN_COVERAGE) continue; // the search matched a stray word: not about this subject
+
     out.push({
+      rel,
       id: `commons-${pg.pageid}`,
       source: 'Wikimedia Commons',
       type: 'photo',
@@ -62,7 +89,8 @@ export async function searchCommons(query, limit = 4) {
       download: info.thumburl, // 1600px rendition: small enough to proxy
     });
   }
-  return out;
+  out.sort((a, b) => b.rel - a.rel);
+  return out.slice(0, limit);
 }
 
 // ---------------------------------------------------------------- Library of Congress

@@ -30,8 +30,28 @@ export default async (req) => {
   const jobs = [];
   const add = (source, promise) => jobs.push(promise.then((items) => ({ source, items })).catch((e) => ({ source, error: e?.name === 'AbortError' ? 'timed out' : e.message })));
 
+  if (photos && want.commons) {
+    // One query at a time: Wikimedia rate-limits bursts (HTTP 429).
+    add(
+      'Wikimedia Commons',
+      (async () => {
+        const out = [];
+        let err;
+        const started = Date.now();
+        for (const q of queries) {
+          if (Date.now() - started > 6500) break; // stay inside Netlify's ~10 s function limit
+          try {
+            out.push(...(await searchCommons(q, 4)));
+          } catch (e) {
+            err = e;
+          }
+        }
+        if (!out.length && err) throw err;
+        return out;
+      })(),
+    );
+  }
   for (const q of queries) {
-    if (photos && want.commons) add('Wikimedia Commons', searchCommons(q, 4));
     if (photos && want.loc) add('Library of Congress', searchLoc(q, 3));
   }
   for (const q of stockQueries) {

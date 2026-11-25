@@ -279,7 +279,7 @@
 
       let done = 0;
       const warned = new Set();
-      await pool(scenes, 2, async (scene, i) => {
+      await pool(scenes, 1, async (scene, i) => {
         try {
           const r = await searchScene(scene, opts);
           scene.items = r.items;
@@ -415,10 +415,20 @@
     return el;
   }
 
+  // With nothing selected, take the best few per scene instead of everything.
+  function defaultCap(scene) {
+    return Math.max(8, Math.ceil((scene.needed || 0) * 1.3));
+  }
   function chosenItems() {
-    const all = current.scenes.flatMap((s, si) => s.items.map((it) => ({ it, si })));
-    if (!selected.size) return all;
-    return all.filter(({ it }) => selected.has(it.id));
+    if (selected.size) {
+      return current.scenes.flatMap((s, si) => s.items.filter((it) => selected.has(it.id)).map((it) => ({ it, si })));
+    }
+    return current.scenes.flatMap((s, si) => {
+      let photos = 0;
+      return s.items
+        .filter((it) => it.type !== 'photo' || photos++ < defaultCap(s))
+        .map((it) => ({ it, si }));
+    });
   }
 
   function updateZipLabel() {
@@ -427,12 +437,12 @@
     $('zipBtn').textContent = `⬇ Download ZIP (${n} photo${n === 1 ? '' : 's'})`;
     $('zipNote').textContent = selected.size
       ? `${selected.size} selected. Only these go in the ZIP. Click again to deselect.`
-      : 'Click images to choose specific ones. With nothing selected, the ZIP contains every photo.';
+      : 'Click images to choose specific ones. With nothing selected, the ZIP takes the best matches for each scene (about 8 or more per scene). Select images to override.';
   }
 
   // ------------------------------------------------------------ ZIP
   async function fetchAsset(url) {
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const res = await fetch('/api/asset?url=' + encodeURIComponent(url), { headers: keyHeaders() });
         if (res.ok) {
@@ -447,8 +457,8 @@
         if (res.status < 500) throw new Error(msg);
         throw new Error(msg);
       } catch (e) {
-        if (attempt === 1) throw e;
-        await sleep(600);
+        if (attempt === 2) throw e;
+        await sleep(900 * (attempt + 1)); // back off: image hosts rate-limit bursts
       }
     }
   }
@@ -476,7 +486,7 @@
       }
 
       let finished = 0;
-      await pool(photos, 4, async ({ it, si }) => {
+      await pool(photos, 3, async ({ it, si }) => {
         try {
           const { buf, type } = await fetchAsset(it.download);
           const scene = current.scenes[si];
